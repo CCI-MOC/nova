@@ -88,6 +88,99 @@ def reset_globals():
     _SESSION = None
 
 
+
+# THANKS RODRIGODS
+
+import json
+import os
+
+from keystoneclient import session as ksc_session
+from keystoneclient.auth.identity import v3
+from keystoneclient.v3 import client as keystone_v3
+
+
+
+
+LOCAL_AUTH_URL="http://128.52.181.208:5000/v3"
+REMOTE_AUTH_RUL="TBD"
+
+class K2KClient(object):
+    def __init__(self, auth):
+        self.sp_id = "keystone-sp"
+        self.auth = auth
+        self.auth_url = LOCAL_AUTH_URL
+
+    def v3_authenticate(self):
+        auth = self.auth #v3.Password(auth_url=self.auth_url,
+                          # username=self.username,
+                          # password=self.password,
+                          # user_domain_id=self.domain_id,
+                          # project_id=self.project_id)
+        self.session = ksc_session.Session(auth=auth, verify=False)
+        self.session.auth.get_auth_ref(self.session)
+        self.token = self.session.auth.get_token(self.session)
+
+    def _generate_token_json(self):
+        return {
+            "auth": {
+                "identity": {
+                    "methods": [
+                        "token"
+                    ],
+                    "token": {
+                        "id": self.token
+                    }
+                },
+                "scope": {
+                    "service_provider": {
+                        "id": self.sp_id
+                    }
+                }
+            }
+        }
+
+    def _check_response(self, response):
+        if not response.ok:
+            raise Exception("Something went wrong, %s" % response.__dict__)
+
+    def get_saml2_ecp_assertion(self):
+        token = json.dumps(self._generate_token_json())
+        url = self.auth_url + '/auth/OS-FEDERATION/saml2/ecp'
+        r = self.session.post(url=url, data=token, verify=False)
+        self._check_response(r)
+        self.assertion = str(r.text)
+
+    def _get_sp(self):
+        url = self.auth_url + '/OS-FEDERATION/service_providers/' + self.sp_id
+        r = self.session.get(url=url, verify=False)
+        self._check_response(r)
+        sp = json.loads(r.text)[u'service_provider']
+        return sp
+
+    def _handle_http_302_ecp_redirect(self, response, location, **kwargs):
+        return self.session.get(location, authenticated=False, **kwargs)
+
+    def exchange_assertion(self):
+        """Send assertion to a Keystone SP and get token."""
+        sp = self._get_sp()
+
+        r = self.session.post(
+            sp[u'sp_url'],
+            headers={'Content-Type': 'application/vnd.paos+xml'},
+            data=self.assertion,
+            authenticated=False,
+            redirect=False)
+
+        self._check_response(r)
+
+        r = self._handle_http_302_ecp_redirect(r, sp[u'auth_url'],
+                                               headers={'Content-Type':
+                                               'application/vnd.paos+xml'})
+        self.fed_token_id = r.headers['X-Subject-Token']
+        self.fed_token = r.text
+
+
+
 def cinderclient(context):
     global _SESSION
     global _V1_ERROR_RAISED
@@ -96,10 +189,27 @@ def cinderclient(context):
         _SESSION = session.Session.load_from_conf_options(CONF,
                                                           CINDER_OPT_GROUP)
 
+    import pdb; pdb.set_trace()
+
     url = None
     endpoint_override = None
 
     auth = context.get_auth_plugin()
+
+    # now do K2K to get a token for the other cloud!!!
+    client = K2KClient(auth)
+    client.v3_authenticate()
+    client.get_saml2_ecp_assertion()
+    client.exchange_assertion()
+    project_list = client.list_federated_projects()
+    project_id = project_list[u'projects'][1][u'id']
+    client.scope_token(project_id=project_id)
+    my_federated_token = client.scoped_token_id
+    auth = v3.Token(auth_url=REMOTE_AUTH_URL,
+                    token=my_federated_token)
+
+    # we're done?????
+
     service_type, service_name, interface = CONF.cinder.catalog_info.split(':')
 
     service_parameters = {'service_type': service_type,
@@ -129,7 +239,7 @@ def cinderclient(context):
     return cinder_client.Client(version,
                                 session=_SESSION,
                                 auth=auth,
-                                endpoint_override=endpoint_override,
+                                #endpoint_override=endpoint_override,
                                 connect_retries=CONF.cinder.http_retries,
                                 **service_parameters)
 
