@@ -101,8 +101,8 @@ from keystoneclient.v3 import client as keystone_v3
 
 
 
-LOCAL_AUTH_URL="http://128.52.181.208:5000/v3"
-REMOTE_AUTH_RUL="TBD"
+LOCAL_AUTH_URL="http://128.52.183.234:5000/v3"
+REMOTE_AUTH_URL="http://128.52.183.216:5000/v2"
 
 class K2KClient(object):
     def __init__(self, auth):
@@ -179,6 +179,49 @@ class K2KClient(object):
         self.fed_token_id = r.headers['X-Subject-Token']
         self.fed_token = r.text
 
+    def list_federated_projects(self):
+        url = 'http://128.52.183.216:5000/v3/OS-FEDERATION/projects'
+        headers = {'x-auth-token': self.fed_token_id}
+        print headers
+        r = self.session.get(url=url, headers=headers, verify=False)
+        print json.loads(str(r.text))
+        self._check_response(r)
+        return json.loads(str(r.text))
+
+    def _get_scoped_token_json(self, project_id):
+        return {
+            "auth": {
+                "identity": {
+                    "methods": [
+                        "token"
+                    ],
+                    "token": {
+                        "id": self.fed_token_id
+                    }
+                },
+                "scope": {
+                    "project": {
+                        "id": project_id
+                    }
+                }
+            }
+        }
+
+    def scope_token(self, project_id):
+        # project_id can be select from the list in the previous step
+        token = json.dumps(self._get_scoped_token_json(project_id))
+        print token
+        url = 'http://128.52.183.216:5000/v3/auth/tokens'
+        headers = {'x-auth-token': self.fed_token_id,
+        'Content-Type': 'application/json'}
+        r = self.session.post(url=url, headers=headers, data=token,
+        verify=False)
+        self._check_response(r)
+        self.r = r
+        self.scoped_token_id = r.headers['X-Subject-Token']
+        self.scoped_token = str(r.text)
+
+
 
 
 def cinderclient(context):
@@ -195,6 +238,7 @@ def cinderclient(context):
     endpoint_override = None
 
     auth = context.get_auth_plugin()
+    old_auth = auth
 
     # now do K2K to get a token for the other cloud!!!
     client = K2KClient(auth)
@@ -221,7 +265,7 @@ def cinderclient(context):
         url = CONF.cinder.endpoint_template % context.to_dict()
         endpoint_override = url
     else:
-        url = _SESSION.get_endpoint(auth, **service_parameters)
+        url = _SESSION.get_endpoint(old_auth, **service_parameters)
 
     # TODO(jamielennox): This should be using proper version discovery from
     # the cinder service rather than just inspecting the URL for certain string
