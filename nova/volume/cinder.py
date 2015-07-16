@@ -95,14 +95,16 @@ import json
 import os
 
 from keystoneclient import session as ksc_session
+from keystoneclient.auth.identity import v2
 from keystoneclient.auth.identity import v3
 from keystoneclient.v3 import client as keystone_v3
+from keystoneclient import access
 
 
 
 
 LOCAL_AUTH_URL="http://128.52.183.234:5000/v3"
-REMOTE_AUTH_URL="http://128.52.183.216:5000/v2"
+REMOTE_AUTH_URL="http://128.52.183.216:5000/v3"
 
 class K2KClient(object):
     def __init__(self, auth):
@@ -249,8 +251,14 @@ def cinderclient(context):
     project_id = project_list[u'projects'][1][u'id']
     client.scope_token(project_id=project_id)
     my_federated_token = client.scoped_token_id
+    # (minying) because auth.get_auth_ref() will re-authenticate the token which doesn't have group id info
+    # I define auth.auth_ref which will set _needs_authenticate to false and therefore won't request POST /v3/auth/tokens to SP
+    # note that scoped_auth_ref has to be an access.AccessInfoV3 object
+    client.scoped_token_json = client.r.json()
+    scoped_auth_ref = access.AccessInfoV3(my_federated_token, client.scoped_token_json['token'])
     auth = v3.Token(auth_url=REMOTE_AUTH_URL,
                     token=my_federated_token)
+    auth.auth_ref = scoped_auth_ref
 
     # we're done?????
 
@@ -280,6 +288,8 @@ def cinderclient(context):
         LOG.warn(msg)
         _V1_ERROR_RAISED = True
 
+    # I think it's probably okay to get rid of auth in here
+    # because session.auth is the same thing
     return cinder_client.Client(version,
                                 session=_SESSION,
                                 auth=auth,
