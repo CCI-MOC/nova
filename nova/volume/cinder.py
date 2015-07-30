@@ -104,14 +104,14 @@ from keystoneclient import access
 
 
 
-LOCAL_AUTH_URL="http://128.52.184.165:5000/v3"
-REMOTE_AUTH_URL="http://128.52.184.164:5000/v3"
+LOCAL_AUTH_URL="http://128.52.184.165:5000/v3" # FIXME this shouldn't be needed.
 
 class K2KClient(object):
-    def __init__(self, auth):
-        self.sp_id = "keystone-sp"
+    def __init__(self, auth, sp_id, remote_auth_url):
+        self.sp_id = sp_id
         self.auth = auth
         self.auth_url = LOCAL_AUTH_URL
+        self.remote_auth_url = remote_auth_url
 
     def v3_authenticate(self):
         auth = self.auth #v3.Password(auth_url=self.auth_url,
@@ -182,7 +182,7 @@ class K2KClient(object):
         self.fed_token = r.text
 
     def list_federated_projects(self):
-        url = REMOTE_AUTH_URL + '/OS-FEDERATION/projects'
+        url = self.remote_auth_url + '/OS-FEDERATION/projects'
         headers = {'x-auth-token': self.fed_token_id}
         print headers
         r = self.session.get(url=url, headers=headers, verify=False)
@@ -213,7 +213,7 @@ class K2KClient(object):
         # project_id can be select from the list in the previous step
         token = json.dumps(self._get_scoped_token_json(project_id))
         print token
-        url = REMOTE_AUTH_URL + '/auth/tokens'
+        url = self.remote_auth_url + '/auth/tokens'
         headers = {'x-auth-token': self.fed_token_id,
         'Content-Type': 'application/json'}
         r = self.session.post(url=url, headers=headers, data=token,
@@ -242,27 +242,44 @@ def cinderclient(context):
     version = None
 
     auth = context.get_auth_plugin()
-    old_auth=auth
+    old_auth = auth
 
-    # now do K2K to get a token for the other cloud!!!
-    client = K2KClient(auth)
-    client.v3_authenticate()
-    client.get_saml2_ecp_assertion()
-    client.exchange_assertion()
-    project_list = client.list_federated_projects()
-    project_id = project_list[u'projects'][0][u'id']
-    client.scope_token(project_id=project_id)
-    my_federated_token = client.scoped_token_id
-    print ("scoped to project: %s", project_list[u'projects'][0][u'name'])
-    # (minying) because auth.get_auth_ref() will re-authenticate the token which doesn't have group id info
-    # I define auth.auth_ref which will set _needs_authenticate to false and therefore won't request POST /v3/auth/tokens to SP
-    # note that scoped_auth_ref has to be an access.AccessInfoV3 object
-    client.scoped_token_json = client.r.json()
-    scoped_auth_ref = access.AccessInfoV3(my_federated_token, client.scoped_token_json['token'])
-    auth = v3.Token(auth_url=REMOTE_AUTH_URL,
-                    token=my_federated_token)
-    auth.auth_ref = scoped_auth_ref
-    # we're done?????
+    try:
+        sp_id = context.service_provider
+    except AttributeError:
+        sp_id = None
+
+    if sp_id is not None:
+        ksclient = keystone_v3.Client(auth_url=LOCAL_AUTH_URL,
+                                      token=context.auth_token) # FIXME ugly
+        sp_list = ksclient.service_catalog.catalog[u'service_providers']
+        for sp in sp_list:
+	    if sp[u'id'] == sp_id:
+               auth_url = sp[u'auth_url'].split('/v3/')[0] + '/v3'
+               break
+        else:
+            raise cinder_exception.UnsupportedVersion("wegfwreg")
+            pass #FIXME error
+
+        # now do K2K to get a token for the other cloud!!!
+        client = K2KClient(auth, sp_id, auth_url)
+        client.v3_authenticate()
+        client.get_saml2_ecp_assertion()
+        client.exchange_assertion()
+        project_list = client.list_federated_projects()
+        project_id = project_list[u'projects'][0][u'id']
+        client.scope_token(project_id=project_id)
+        my_federated_token = client.scoped_token_id
+        print ("scoped to project: %s", project_list[u'projects'][0][u'name'])
+        # (minying) because auth.get_auth_ref() will re-authenticate the token which doesn't have group id info
+        # I define auth.auth_ref which will set _needs_authenticate to false and therefore won't request POST /v3/auth/tokens to SP
+        # note that scoped_auth_ref has to be an access.AccessInfoV3 object
+        client.scoped_token_json = client.r.json()
+        scoped_auth_ref = access.AccessInfoV3(my_federated_token, client.scoped_token_json['token'])
+        auth = v3.Token(auth_url=auth_url,
+                        token=my_federated_token)
+        auth.auth_ref = scoped_auth_ref
+        # we're done?????
 
     service_type, service_name, interface = CONF.cinder.catalog_info.split(':')
 
