@@ -354,7 +354,7 @@ class ComputeAPI(object):
                           instance=instance, network_id=network_id,
                           port_id=port_id, requested_ip=requested_ip)
 
-    def attach_volume(self, ctxt, instance, volume_id, mountpoint, bdm=None):
+    def attach_volume(self, ctxt, instance, volume_id, mountpoint, bdm=None, sp_id=None):
         kw = {'instance': instance, 'bdm': bdm}
         if self.client.can_send_version('4.0'):
             version = '4.0'
@@ -362,6 +362,14 @@ class ComputeAPI(object):
             version = '3.16'
             kw['mountpoint'] = mountpoint
             kw['volume_id'] = volume_id
+
+        try:
+            sp_id = ctxt.service_provider
+        except AttributeError:
+            sp_id = None
+        if sp_id is not None: # ADDED, MAKE SURE TO ACTUALLY FIX THIS API EVENTUALLY
+            kw['sp_id'] = sp_id
+
         cctxt = self.client.prepare(server=_compute_host(None, instance),
                 version=version)
         cctxt.cast(ctxt, 'attach_volume', **kw)

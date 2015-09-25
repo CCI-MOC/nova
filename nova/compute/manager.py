@@ -4776,8 +4776,11 @@ class ComputeManager(manager.Manager):
     @reverts_task_state
     @wrap_instance_fault
     def attach_volume(self, context, volume_id, mountpoint,
-                      instance, bdm=None):
+                      instance, bdm=None, sp_id=None):
         """Attach a volume to an instance."""
+        if sp_id is not None:
+            context.service_provider = sp_id
+
         if not bdm:
             bdm = objects.BlockDeviceMapping.get_by_volume_id(
                     context, volume_id)
@@ -6601,13 +6604,13 @@ class _ComputeV4Proxy(object):
         return self.manager.attach_interface(ctxt, instance, network_id,
                                              port_id, requested_ip)
 
-    def attach_volume(self, ctxt, instance, bdm):
+    def attach_volume(self, ctxt, instance, bdm, sp_id=None):
         # NOTE(danms): In 3.x, attach_volume had mountpoint and volume_id
         # parameters, which are gone from 4.x. Provide None for each to
         # the 3.x manager above and remove in Lemming.
         return self.manager.attach_volume(ctxt, None, None,
                                           instance=instance,
-                                          bdm=bdm)
+                                          bdm=bdm, sp_id=sp_id)
 
     def change_instance_metadata(self, ctxt, instance, diff):
         return self.manager.change_instance_metadata(
