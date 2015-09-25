@@ -4861,8 +4861,12 @@ class ComputeManager(manager.Manager):
     @wrap_exception()
     @reverts_task_state
     @wrap_instance_fault
-    def detach_volume(self, context, volume_id, instance):
+    def detach_volume(self, context, volume_id, instance, sp_id=None):
         """Detach a volume from an instance."""
+
+        if sp_id is not None:
+            context.service_provider = sp_id
+
         bdm = objects.BlockDeviceMapping.get_by_volume_id(
                 context, volume_id)
         if CONF.volume_usage_poll_interval > 0:
@@ -6635,10 +6639,10 @@ class _ComputeV4Proxy(object):
     def detach_interface(self, ctxt, instance, port_id):
         return self.manager.detach_interface(ctxt, instance, port_id)
 
-    def detach_volume(self, ctxt, volume_id, instance):
+    def detach_volume(self, ctxt, volume_id, instance, sp_id=None):
         # NOTE(danms): Pass instance by kwarg to help the object_compat
         # decorator, as real RPC dispatch does.
-        return self.manager.detach_volume(ctxt, volume_id, instance=instance)
+        return self.manager.detach_volume(ctxt, volume_id, instance=instance, sp_id=sp_id)
 
     def finish_resize(self, ctxt, disk_info, image, instance,
                       reservations, migration):

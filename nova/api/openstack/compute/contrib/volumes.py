@@ -395,7 +395,24 @@ class VolumeAttachmentController(wsgi.Controller):
 
         instance = common.get_instance(self.compute_api, context, server_id)
 
-        volume = self.volume_api.get(context, volume_id)
+        # ADDED
+        from keystoneclient.v3 import client as keystone_v3
+        LOCAL_AUTH_URL="http://128.52.184.165:5000/v3" # FIXME this shouldn't be needed.
+        ksclient = keystone_v3.Client(auth_url=LOCAL_AUTH_URL,
+                                      token=context.auth_token) # FIXME ugly
+        sp_list = ksclient.service_catalog.catalog[u'service_providers']
+        print sp_list
+        sp_list = [{u'id': None}] + sp_list
+        for sp in sp_list:
+            context.service_provider = sp[u'id']
+            try:
+                volume = self.volume_api.get(context, volume_id)
+            except exception.VolumeNotFound as e:
+                continue
+            else:
+                break
+        else:
+            raise exception.VolumeNotFound(volume_id=volume_id)
 
         bdms = objects.BlockDeviceMappingList.get_by_instance_uuid(
                 context, instance.uuid)

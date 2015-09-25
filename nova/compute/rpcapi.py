@@ -474,10 +474,20 @@ class ComputeAPI(object):
         else:
             version = '3.0'
             instance = jsonutils.to_primitive(instance)
+
+        try:
+            sp_id = ctxt.service_provider
+        except AttributeError:
+            sp_id = None
+        if sp_id is not None: # ADDED, MAKE SURE TO ACTUALLY FIX THIS API EVENTUALLY
+            kw = {'sp_id': sp_id}
+        else:
+            kw = {}
+
         cctxt = self.client.prepare(server=_compute_host(None, instance),
                 version=version)
         cctxt.cast(ctxt, 'detach_volume',
-                   instance=instance, volume_id=volume_id)
+                   instance=instance, volume_id=volume_id, **kw)
 
     def finish_resize(self, ctxt, instance, migration, image, disk_info,
             host, reservations=None):
