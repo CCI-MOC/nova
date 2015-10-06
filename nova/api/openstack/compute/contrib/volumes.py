@@ -15,6 +15,7 @@
 
 """The volumes extension."""
 
+from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import strutils
 from oslo_utils import uuidutils
@@ -30,6 +31,12 @@ from nova.i18n import _
 from nova.i18n import _LI
 from nova import objects
 from nova import volume
+
+CONF = cfg.CONF
+CONF.register_opts([cfg.StrOpt('keystone_authtoken.auth_uri',
+                    required=True,
+                    help="URI for K2K auth")],
+                   group='keystone_authtoken')
 
 LOG = logging.getLogger(__name__)
 authorize = extensions.extension_authorizer('compute', 'volumes')
@@ -397,8 +404,7 @@ class VolumeAttachmentController(wsgi.Controller):
 
         # ADDED
         from keystoneclient.v3 import client as keystone_v3
-        LOCAL_AUTH_URL="http://128.52.184.165:5000/v3" # FIXME this shouldn't be needed.
-        ksclient = keystone_v3.Client(auth_url=LOCAL_AUTH_URL,
+        ksclient = keystone_v3.Client(auth_url=CONF.keystone_authtoken.auth_uri + "/v3",
                                       token=context.auth_token) # FIXME ugly
         sp_list = ksclient.service_catalog.catalog[u'service_providers']
         print sp_list
