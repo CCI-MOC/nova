@@ -55,7 +55,7 @@ cinder_opts = [
                 default=True,
                 help='Allow attach between instance and volume in different '
                      'availability zones.'),
-    cfg.StrOpt('keystone_authtoken.auth_uri',
+    cfg.StrOpt('auth_uri',
                required=True,
                help="URI for K2K auth"),
 ]
@@ -65,11 +65,6 @@ CINDER_OPT_GROUP = 'cinder'
 
 # cinder_opts options in the DEFAULT group were deprecated in Juno
 CONF.register_opts(cinder_opts, group=CINDER_OPT_GROUP)
-CONF.register_opts([cfg.StrOpt('keystone_authtoken.auth_uri',
-                    required=True,
-                    help="URI for K2K auth")],
-                   group='keystone_authtoken')
-
 
 deprecated = {'timeout': [cfg.DeprecatedOpt('http_timeout',
                                             group=CINDER_OPT_GROUP)],
@@ -114,7 +109,7 @@ class K2KClient(object):
     def __init__(self, auth, sp_id, remote_auth_url):
         self.sp_id = sp_id
         self.auth = auth
-        self.auth_url = CONF.keystone_authtoken.auth_uri + "/v3"
+        self.auth_url = CONF.cinder.auth_uri + "/v3"
         self.remote_auth_url = remote_auth_url
 
     def v3_authenticate(self):
@@ -254,7 +249,7 @@ def cinderclient(context):
         sp_id = None
 
     if sp_id is not None:
-        ksclient = keystone_v3.Client(auth_url=CONF.keystone_authtoken.auth_uri + "/v3",
+        ksclient = keystone_v3.Client(auth_url=CONF.cinder.auth_uri + "/v3",
                                       token=context.auth_token) # FIXME ugly
         sp_list = ksclient.service_catalog.catalog[u'service_providers']
         for sp in sp_list:

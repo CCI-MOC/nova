@@ -296,7 +296,7 @@ class VolumeAttachmentController(wsgi.Controller):
             msg = _("volumeId must be specified.")
             raise exc.HTTPBadRequest(explanation=msg)
         device = body['volumeAttachment'].get('device')
-        context.service_provider = body['volumeAttachment'].get('service_provider')
+        context.service_provider = body['volumeAttachment'].get('serviceProvider')
 
         self._validate_volume_id(volume_id)
 
