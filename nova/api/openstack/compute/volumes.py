@@ -29,10 +29,21 @@ from nova.i18n import _
 from nova import objects
 from nova import volume
 
+from keystoneclient.v3 import client as keystone_v3
+from oslo_config import cfg
+from oslo_log import log as logging
+
+CONF = cfg.CONF
+CONF.register_opts([cfg.StrOpt('keystone_authtoken.auth_uri',
+                               required=True,
+                               help="URI for K2K auth")],
+                   group='keystone_authtoken')
+
 ALIAS = "os-volumes"
 authorize = extensions.os_compute_authorizer(ALIAS)
 authorize_attach = extensions.os_compute_authorizer('os-volumes-attachments')
 
+LOG = logging.getLogger(__name__)
 
 def _translate_volume_detail_view(context, vol):
     """Maps keys for volumes details view."""
@@ -276,6 +287,7 @@ class VolumeAttachmentController(wsgi.Controller):
 
         volume_id = body['volumeAttachment']['volumeId']
         device = body['volumeAttachment'].get('device')
+        context.service_provider = body['volumeAttachment']['serviceProvider']
 
         instance = common.get_instance(self.compute_api, context, server_id)
         try:
@@ -372,10 +384,25 @@ class VolumeAttachmentController(wsgi.Controller):
 
         instance = common.get_instance(self.compute_api, context, server_id)
 
-        try:
-            volume = self.volume_api.get(context, volume_id)
-        except exception.VolumeNotFound as e:
+        # START K2K
+        ksclient = keystone_v3.Client(
+            auth_url=CONF.keystone_authtoken.authtoken.auth.uri + "/v3",
+            token=context.auth_token)
+        sp_list = ksclient.service_catalog.catalog[u'service_providers']
+        print sp_list
+        sp_list = [{u'id': None}] + sp_list
+
+        for sp in sp_list:
+            context.service_provider = sp[u'id']
+            try:
+                volume = self.volume_api.get(context, volume_id)
+            except exception.VolumeNotFound as e:
+                continue
+            else:
+                break
+        else:
             raise exc.HTTPNotFound(explanation=e.format_message())
+        # END K2K
 
         bdms = objects.BlockDeviceMappingList.get_by_instance_uuid(
                 context, instance.uuid)

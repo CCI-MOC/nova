@@ -68,6 +68,7 @@ create_volume_attachment = {
             'type': 'object',
             'properties': {
                 'volumeId': parameter_types.volume_id,
+                'serviceProvider': parameter_types.service_provider,
                 'device': {
                     'type': ['string', 'null'],
                     # NOTE: The validation pattern from match_device() in

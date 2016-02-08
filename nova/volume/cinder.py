@@ -36,6 +36,11 @@ from nova import exception
 from nova.i18n import _
 from nova.i18n import _LW
 
+from keystoneclient.auth.identity import v3
+from keystoneclient.v3 import client as keystone_v3
+from keystoneclient.v3.contrib.federation.saml import SamlManager
+from keystoneclient import access
+
 cinder_opts = [
     cfg.StrOpt('catalog_info',
             default='volumev2:cinderv2:publicURL',
@@ -54,6 +59,9 @@ cinder_opts = [
                 default=True,
                 help='Allow attach between instance and volume in different '
                      'availability zones.'),
+    cfg.StrOpt('auth_uri',
+               required=True,
+               help="Auth URI for K2K"),
 ]
 
 CONF = cfg.CONF
@@ -87,6 +95,92 @@ def reset_globals():
     _SESSION = None
 
 
+import json
+import os
+import time
+import sys
+
+class K2KClient(object):
+    def __init__(self, sp_id, session, token):
+        self.sp_id = sp_id
+        self.token = token
+        self.session = session
+        self.client = keystone_v3.Client(session=session)
+        self.sp = self.client.federation.service_providers.get(self.sp_id)
+        self.sp_auth_url = self.sp.auth_url.split('/v3/')[0] + '/v3'
+
+    def _check_response(self, response):
+        if not response.ok:
+            raise Exception("Something went wrong, %s" % response.__dict__)
+
+    def get_saml2_ecp_assertion(self):
+        sm = SamlManager(self.client)
+        self.assertion = sm.create_ecp_assertion(self.sp_id, self.token)
+
+    def _handle_http_302_ecp_redirect(self, response, location, **kwargs):
+        return self.session.get(location, authenticated=False, **kwargs)
+
+    def exchange_assertion(self):
+        """Send assertion to a Keystone SP and get token."""
+        r = self.session.post(
+            self.sp.sp_url,
+            headers={'Content-Type': 'application/vnd.paos+xml'},
+            data=self.assertion,
+            authenticated=False,
+            redirect=False)
+
+        self._check_response(r)
+
+        r = self._handle_http_302_ecp_redirect(r, self.sp.auth_url,
+                                               headers={'Content-Type':
+                                               'application/vnd.paos+xml'})
+        self.fed_token_id = r.headers['X-Subject-Token']
+        self.fed_token = r.text
+
+    def list_federated_projects(self):
+        url = self.sp_auth_url + '/OS-FEDERATION/projects'
+        headers = {'x-auth-token': self.fed_token_id}
+        print headers
+        r = self.session.get(url=url, headers=headers, verify=False)
+        print json.loads(str(r.text))
+        self._check_response(r)
+        return json.loads(str(r.text))
+
+    def _get_scoped_token_json(self, project_id):
+        return {
+            "auth": {
+                "identity": {
+                    "methods": [
+                        "token"
+                    ],
+                    "token": {
+                        "id": self.fed_token_id
+                    }
+                },
+                "scope": {
+                    "project": {
+                        "id": project_id
+                    }
+                }
+            }
+        }
+
+    def scope_token(self, project_id):
+        # project_id can be select from the list in the previous step
+        token = json.dumps(self._get_scoped_token_json(project_id))
+        print token
+        url = self.sp_auth_url + '/auth/tokens'
+        headers = {'x-auth-token': self.fed_token_id,
+        'Content-Type': 'application/json'}
+        r = self.session.post(url=url, headers=headers, data=token,
+        verify=False)
+        self._check_response(r)
+        self.r = r
+        self.scoped_token_id = r.headers['X-Subject-Token']
+        self.scoped_token_ref = str(r.text)
+
+
+
 def cinderclient(context):
     global _SESSION
     global _V1_ERROR_RAISED
@@ -99,6 +193,36 @@ def cinderclient(context):
     endpoint_override = None
 
     auth = context.get_auth_plugin()
+    old_auth = auth
+
+    try:
+        sp_id = context.service_provider
+    except:
+        sp_id = None
+
+    if sp_id is not None:
+        new_auth = v3.Token(auth_url=CONF.cinder.auth_uri + '/v3', token=context.auth_token)
+        s = session.Session(auth=auth, verify=False)
+
+        # now do K2K to get a token for the other cloud!!!
+        client = K2KClient(sp_id, s, context.auth_token)
+        client.get_saml2_ecp_assertion()
+        client.exchange_assertion()
+        project_list = client.list_federated_projects()
+        project_id = project_list[u'projects'][0][u'id']
+        client.scope_token(project_id=project_id)
+        my_federated_token = client.scoped_token_id
+        print ("scoped to project: %s", project_list[u'projects'][0][u'name'])
+        # (minying) because auth.get_auth_ref() will re-authenticate the token which doesn't have group id info
+        # I define auth.auth_ref which will set _needs_authenticate to false and therefore won't request POST /v3/auth/tokens to SP
+        # note that scoped_auth_ref has to be an access.AccessInfoV3 object
+        client.scoped_token_json = client.r.json()
+        scoped_auth_ref = access.AccessInfoV3(my_federated_token, client.scoped_token_json['token'])
+        auth = v3.Token(auth_url=client.sp_auth_url,
+                        token=my_federated_token)
+        auth.auth_ref = scoped_auth_ref
+
+
     service_type, service_name, interface = CONF.cinder.catalog_info.split(':')
 
     service_parameters = {'service_type': service_type,
@@ -110,7 +234,7 @@ def cinderclient(context):
         url = CONF.cinder.endpoint_template % context.to_dict()
         endpoint_override = url
     else:
-        url = _SESSION.get_endpoint(auth, **service_parameters)
+        url = _SESSION.get_endpoint(old_auth, **service_parameters)
 
     # TODO(jamielennox): This should be using proper version discovery from
     # the cinder service rather than just inspecting the URL for certain string
@@ -128,7 +252,7 @@ def cinderclient(context):
     return cinder_client.Client(version,
                                 session=_SESSION,
                                 auth=auth,
-                                endpoint_override=endpoint_override,
+                                #endpoint_override=endpoint_override,
                                 connect_retries=CONF.cinder.http_retries,
                                 **service_parameters)
 
