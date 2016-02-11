@@ -34,10 +34,6 @@ from oslo_config import cfg
 from oslo_log import log as logging
 
 CONF = cfg.CONF
-CONF.register_opts([cfg.StrOpt('keystone_authtoken.auth_uri',
-                               required=True,
-                               help="URI for K2K auth")],
-                   group='keystone_authtoken')
 
 ALIAS = "os-volumes"
 authorize = extensions.os_compute_authorizer(ALIAS)
@@ -386,7 +382,7 @@ class VolumeAttachmentController(wsgi.Controller):
 
         # START K2K
         ksclient = keystone_v3.Client(
-            auth_url=CONF.keystone_authtoken.authtoken.auth.uri + "/v3",
+            auth_url=CONF.keystone_authtoken.auth_url + "/v3",
             token=context.auth_token)
         sp_list = ksclient.service_catalog.catalog[u'service_providers']
         print sp_list
