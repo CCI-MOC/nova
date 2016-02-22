@@ -101,16 +101,19 @@ import time
 import sys
 
 class K2KClient(object):
-    def __init__(self, sp_id, sess, token):
+    def __init__(self, sp_id, sess, context):
         self.sp_id = sp_id
-        self.token = token
+        self.token = context.auth_token
+        self.context = context
         self.session = sess
         self.client = keystone_v3.Client(session=sess)
 
         try:
             self.sp = self.client.federation.service_providers.get(self.sp_id)
         except:
-            self.auth = v3.Token('http://128.52.181.107:35357/v3', self.token, project_name='admin', project_domain_name='default')
+            self.auth = v3.Token(CONF.cinder.auth_uri + '/v3',
+                                 self.token,
+                                 project_id=self.context.project_id)
             self.session = session.Session(auth=self.auth, verify=False)
             self.client = keystone_v3.Client(session=self.session)
             self.sp = self.client.federation.service_providers.get(self.sp_id)
@@ -211,7 +214,7 @@ def cinderclient(context):
         s = session.Session(auth=auth, verify=False)
 
         # now do K2K to get a token for the other cloud!!!
-        client = K2KClient(sp_id, s, context.auth_token)
+        client = K2KClient(sp_id, s, context)
         client.get_saml2_ecp_assertion()
         client.exchange_assertion()
         project_list = client.list_federated_projects()
