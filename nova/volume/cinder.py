@@ -38,7 +38,6 @@ from nova.i18n import _LW
 
 from keystoneauth1 import identity
 from keystoneauth1.identity import v3
-from keystoneauth1 import session as kauth_session
 
 cinder_opts = [
     cfg.StrOpt('catalog_info',
@@ -58,9 +57,9 @@ cinder_opts = [
                 default=True,
                 help='Allow attach between instance and volume in different '
                      'availability zones.'),
-    cfg.StrOpt('auth_uri',
+    cfg.StrOpt('auth_url',
                required=True,
-               help="Auth URI for K2K"),
+               help="Auth URL for K2K"),
 ]
 
 CONF = cfg.CONF
@@ -114,14 +113,17 @@ def cinderclient(context):
         sp_id = None
 
     if sp_id is not None:
-        idp_auth = identity.Token(auth_url=CONF.cinder.auth_uri,
+        # NOTE(knikolla): old_auth doesn't seem to work with K2K,
+        # also idp_auth generated using a project_id instead of
+        # project_name + project_domain doesn't seem to work.
+        idp_auth = identity.Token(auth_url=CONF.cinder.auth_url,
                                   token=context.auth_token,
-                                  project_name='admin',
+                                  project_name=context.project_name,
                                   project_domain_id='default')
 
         auth = v3.Keystone2Keystone(idp_auth,
                                     sp_id,
-                                    project_name='admin',
+                                    project_name=context.project_name,
                                     project_domain_id='default')
 
     service_type, service_name, interface = CONF.cinder.catalog_info.split(':')

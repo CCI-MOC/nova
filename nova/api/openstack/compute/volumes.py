@@ -283,7 +283,9 @@ class VolumeAttachmentController(wsgi.Controller):
 
         volume_id = body['volumeAttachment']['volumeId']
         device = body['volumeAttachment'].get('device')
-        context.service_provider = body['volumeAttachment']['serviceProvider']
+
+        if 'serviceProvider' in body['volumeAttachment']:
+            context.service_provider = body['volumeAttachment']['serviceProvider']
 
         instance = common.get_instance(self.compute_api, context, server_id)
         try:
