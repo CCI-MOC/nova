@@ -383,6 +383,9 @@ class VolumeAttachmentController(wsgi.Controller):
         instance = common.get_instance(self.compute_api, context, server_id)
 
         # START K2K
+        # Note(knikolla): Here we are traversing the service provider list
+        # starting from ourselves. Inserting some info in the DB regarding
+        # the service provider of a volume should make this unnecessary.
         ksclient = keystone_v3.Client(
             auth_url=CONF.keystone_authtoken.auth_url + "/v3",
             token=context.auth_token)

@@ -107,22 +107,19 @@ def cinderclient(context):
     auth = context.get_auth_plugin()
     old_auth = auth
 
-    try:
-        sp_id = context.service_provider
-    except:
-        sp_id = None
-
-    if sp_id is not None:
+    if hasattr(context, 'service_provider') and context.service_provider is not None:
         # NOTE(knikolla): old_auth doesn't seem to work with K2K,
         # also idp_auth generated using a project_id instead of
         # project_name + project_domain doesn't seem to work.
+        # There should be a way to pass this auth instead of
+        # having to reauthenticate everytime.
         idp_auth = identity.Token(auth_url=CONF.cinder.auth_url,
                                   token=context.auth_token,
                                   project_name=context.project_name,
                                   project_domain_id='default')
 
         auth = v3.Keystone2Keystone(idp_auth,
-                                    sp_id,
+                                    context.service_provider,
                                     project_name=context.project_name,
                                     project_domain_id='default')
 
