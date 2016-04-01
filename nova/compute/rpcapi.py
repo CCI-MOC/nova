@@ -364,9 +364,16 @@ class ComputeAPI(object):
 
     def attach_volume(self, ctxt, instance, bdm):
         version = '4.0'
+
+        try:
+            sp_id = ctxt.service_provider
+        except AttributeError:
+            sp_id = None
+
         cctxt = self.client.prepare(server=_compute_host(None, instance),
                                     version=version)
-        cctxt.cast(ctxt, 'attach_volume', instance=instance, bdm=bdm)
+        cctxt.cast(ctxt, 'attach_volume',
+                   instance=instance, bdm=bdm, sp_id=sp_id)
 
     def change_instance_metadata(self, ctxt, instance, diff):
         version = '4.0'
@@ -419,10 +426,16 @@ class ComputeAPI(object):
 
     def detach_volume(self, ctxt, instance, volume_id):
         version = '4.0'
+
+        try:
+            sp_id = ctxt.service_provider
+        except AttributeError:
+            sp_id = None
+
         cctxt = self.client.prepare(server=_compute_host(None, instance),
                 version=version)
         cctxt.cast(ctxt, 'detach_volume',
-                   instance=instance, volume_id=volume_id)
+                   instance=instance, volume_id=volume_id, sp_id=sp_id)
 
     def finish_resize(self, ctxt, instance, migration, image, disk_info,
             host, reservations=None):

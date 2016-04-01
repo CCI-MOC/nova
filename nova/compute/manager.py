@@ -4611,8 +4611,11 @@ class ComputeManager(manager.Manager):
 
     @wrap_exception()
     @wrap_instance_fault
-    def attach_volume(self, context, instance, bdm):
+    def attach_volume(self, context, instance, bdm, sp_id=None):
         """Attach a volume to an instance."""
+        if sp_id is not None:
+            context.service_provider = sp_id
+
         driver_bdm = driver_block_device.convert_volume(bdm)
 
         @utils.synchronized(instance.uuid)
@@ -4783,8 +4786,10 @@ class ComputeManager(manager.Manager):
 
     @wrap_exception()
     @wrap_instance_fault
-    def detach_volume(self, context, volume_id, instance):
+    def detach_volume(self, context, volume_id, instance, sp_id=None):
         """Detach a volume from an instance."""
+        if sp_id is not None:
+            context.service_provider = sp_id
 
         self._detach_volume(context, volume_id, instance)
 

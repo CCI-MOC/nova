@@ -149,6 +149,23 @@ def _create_glance_client(context, host, port, use_ssl, version=1):
         # if so, it is ipv6 address, need to wrap it with '[]'
         host = '[%s]' % host
     endpoint = '%s://%s:%s' % (scheme, host, port)
+    #
+    # from keystoneauth1 import identity
+    # from keystoneauth1 import session as ks
+    # from keystoneauth1.identity.v3.k2k import Keystone2Keystone
+    #
+    # if hasattr(context, 'blabla_service_provider'):
+    #     idp_auth = identity.Token(auth_url='http://localhost:35357',
+    #                               token=context.auth_token,
+    #                               project_id=context.tenant)
+    #
+    #     auth = Keystone2Keystone(idp_auth,
+    #                              context.service_provider,
+    #                              project_name='admin',
+    #                              project_domain_id='default')
+    #
+    #     session = ks.Session(auth=auth)
+    #     return glanceclient.Client(str(version), session=session)
     return glanceclient.Client(str(version), endpoint, **params)
 
 

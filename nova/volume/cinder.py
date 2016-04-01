@@ -38,6 +38,9 @@ from nova.i18n import _
 from nova.i18n import _LE
 from nova.i18n import _LW
 
+from keystoneauth1 import identity
+from keystoneauth1.identity import v3
+
 cinder_opts = [
     cfg.StrOpt('catalog_info',
             default='volumev2:cinderv2:publicURL',
@@ -56,6 +59,9 @@ cinder_opts = [
                 default=True,
                 help='Allow attach between instance and volume in different '
                      'availability zones.'),
+    cfg.StrOpt('auth_url',
+               required=True,
+               help="Auth URL for K2K"),
 ]
 
 CONF = cfg.CONF
@@ -101,6 +107,24 @@ def cinderclient(context):
     endpoint_override = None
 
     auth = context.get_auth_plugin()
+    old_auth = auth
+
+    if hasattr(context, 'service_provider') and context.service_provider is not None:
+        # NOTE(knikolla): old_auth doesn't seem to work with K2K,
+        # also idp_auth generated using a project_id instead of
+        # project_name + project_domain doesn't seem to work.
+        # There should be a way to pass this auth instead of
+        # having to reauthenticate everytime.
+        idp_auth = identity.Token(auth_url=CONF.cinder.auth_url,
+                                  token=context.auth_token,
+                                  project_name=context.project_name,
+                                  project_domain_id='default')
+
+        auth = v3.Keystone2Keystone(idp_auth,
+                                    context.service_provider,
+                                    project_name=context.project_name,
+                                    project_domain_id='default')
+
     service_type, service_name, interface = CONF.cinder.catalog_info.split(':')
 
     service_parameters = {'service_type': service_type,
@@ -112,7 +136,7 @@ def cinderclient(context):
         url = CONF.cinder.endpoint_template % context.to_dict()
         endpoint_override = url
     else:
-        url = _SESSION.get_endpoint(auth, **service_parameters)
+        url = _SESSION.get_endpoint(old_auth, **service_parameters)
 
     # TODO(jamielennox): This should be using proper version discovery from
     # the cinder service rather than just inspecting the URL for certain string
@@ -130,7 +154,7 @@ def cinderclient(context):
     return cinder_client.Client(version,
                                 session=_SESSION,
                                 auth=auth,
-                                endpoint_override=endpoint_override,
+                                #endpoint_override=endpoint_override,
                                 connect_retries=CONF.cinder.http_retries,
                                 **service_parameters)
 
