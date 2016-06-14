@@ -45,7 +45,8 @@ bdm_new_fields = set(['source_type', 'destination_type',
                      'guest_format', 'device_type', 'disk_bus', 'boot_index',
                      'device_name', 'delete_on_termination', 'snapshot_id',
                      'volume_id', 'volume_size', 'image_id', 'no_device',
-                     'connection_info'])
+                     'connection_info', 'source_sp', 'source_project',
+                     'destination_sp', 'destination_project'])
 
 
 bdm_db_only_fields = set(['id', 'instance_uuid'])
@@ -206,6 +207,50 @@ class BlockDeviceDict(dict):
                 if not (image_uuid_specified and boot_index == 0):
                     raise exception.InvalidBDMFormat(
                         details=_("Mapping image to local is not supported."))
+
+
+            # Check various combinations of remote, etc
+            source_sp = api_dict.get('source_sp')
+            source_project = api_dict.get('source_project')
+            destination_sp = api_dict.get('destination_sp')
+            destination_project = api_dict.get('destination_project')
+
+            if source_sp and not source_project:
+                raise exception.InvalidBDMFormat(
+                    details=_("Cannot have source_sp without source_project"))
+            if destination_sp and not destination_project:
+                raise exception.InvalidBDMFormat(
+                    details=_("Cannot have destination_sp without destination_project"))
+            if source_project and not source_sp:
+                raise exception.InvalidBDMFormat(
+                    details=_("Cannot have source_project without source_sp"))
+            if destination_project and not destination_sp:
+                raise exception.InvalidBDMFormat(
+                    details=_("Cannot have destination_project without destination_sp"))
+
+            if source_sp and destination_sp:
+                if source_sp != destination_sp:
+                    raise exception.InvalidBDMFormat(
+                        details=_("Cannot have two different remote service providers"))
+                if source_project != destination_project:
+                    raise exception.InvalidBDMFormat(
+                        details=_("Cannot have two different remote projects"))
+
+            if source_type == 'blank' and source_sp:
+                raise exception.InvalidBDMFormat(
+                    details=_("Cannot have a remote blank source"))
+
+            if destination_type == 'local' and dest_sp:
+                raise exception.InvalidBDMFormat(
+                    details=_("Cannot have a remote local destination"))
+
+            if source_type == 'volume' and destination_type == 'volume':
+                if source_sp and not dest_sp:
+                    raise exception.InvalidBDMFormat(
+                        details=_("volume->volume copying is not supported")
+                elif dest_sp and not source_sp:
+                    raise exception.InvalidBDMFormat(
+                        details=_("volume->volume copying is not supported")
 
         api_dict.pop('uuid', None)
         return cls(api_dict)

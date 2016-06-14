@@ -85,6 +85,7 @@ def _get_volume_create_az_value(instance):
     # NoValidHost error.
     return instance.availability_zone
 
+# XXX TODO(gsilvis): do I have to do anything here?
 
 class DriverBlockDevice(dict):
     """A dict subclass that represents block devices used by the virt layer.

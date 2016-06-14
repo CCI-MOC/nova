@@ -27,6 +27,13 @@ block_device_mapping_new_item = {
         'type': 'string',
         'enum': ['volume', 'image', 'snapshot', 'blank'],
     },
+    'source_sp': {
+        'type': 'string', 'maxLength': 255,
+    },
+    'source_project': {
+        'type': 'string', 'minLength': 1, 'maxLength': 255,
+        'pattern': '^[a-zA-Z0-9._-]*$',
+    },
     'uuid': {
         'type': 'string', 'minLength': 1, 'maxLength': 255,
         'pattern': '^[a-zA-Z0-9._-]*$',
@@ -36,6 +43,13 @@ block_device_mapping_new_item = {
     # "block_device_mapping"
     'destination_type': {
         'type': 'string', 'maxLength': 255,
+    },
+    'destination_sp': {
+        'type': 'string', 'maxLength': 255,
+    },
+    'destination_project': {
+        'type': 'string', 'minLength': 1, 'maxLength': 255,
+        'pattern': '^[a-zA-Z0-9._-]*$',
     },
     # Defined as varchar(255) in column "guest_format" in table
     # "block_device_mapping"

@@ -2353,11 +2353,12 @@ class ComputeManager(manager.Manager):
             try:
                 # NOTE(vish): actual driver detach done in driver.destroy, so
                 #             just tell cinder that we are done with it.
+                import pdb; pdb.set_trace()
                 connector = self.driver.get_volume_connector(instance)
                 self.volume_api.terminate_connection(context,
                                                      bdm.volume_id,
-                                                     connector)
-                self.volume_api.detach(context, bdm.volume_id, instance.uuid)
+                                                     connector) # FIXME(gsilvis): add SP
+                self.volume_api.detach(context, bdm.volume_id, instance.uuid) # FIXME(gsilvis): add SP
             except exception.DiskNotFound as exc:
                 LOG.debug('Ignoring DiskNotFound: %s', exc,
                           instance=instance)
@@ -2390,7 +2391,7 @@ class ComputeManager(manager.Manager):
                       instance_uuid=instance_uuid)
             if bdm.volume_id and bdm.delete_on_termination:
                 try:
-                    self.volume_api.delete(context, bdm.volume_id)
+                    self.volume_api.delete(context, bdm.volume_id) # FIXME(gsilvis): add SP
                 except Exception as exc:
                     exc_info = sys.exc_info()
                     LOG.warning(_LW('Failed to delete volume: %(volume_id)s '
@@ -2995,7 +2996,7 @@ class ComputeManager(manager.Manager):
                 #
                 # API-detach
                 LOG.info(_LI("Detaching from volume api: %s"), volume_id)
-                volume = self.volume_api.get(context, volume_id)
+                volume = self.volume_api.get(context, volume_id) #FIXME(gsilvis) ???
                 self.volume_api.check_detach(context, volume)
                 self.volume_api.begin_detaching(context, volume_id)
 

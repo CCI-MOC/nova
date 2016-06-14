@@ -60,15 +60,20 @@ class BlockDeviceMapping(base.NovaPersistentObject, base.NovaObject,
     # Version 1.15: Instance version 1.23
     # Version 1.16: Deprecate get_by_volume_id(), add
     #               get_by_volume() and get_by_volume_and_instance()
-    VERSION = '1.16'
+    # Version 1.17: Add {source,destination}_{sp,project}
+    VERSION = '1.17'
 
     fields = {
         'id': fields.IntegerField(),
         'instance_uuid': fields.UUIDField(),
         'instance': fields.ObjectField('Instance', nullable=True),
         'source_type': fields.BlockDeviceSourceTypeField(nullable=True),
+        'source_sp': fields.StringField(nullable=True),
+        'source_project': fields.UUIDField(nullable=True),
         'destination_type': fields.BlockDeviceDestinationTypeField(
                                 nullable=True),
+        'destination_sp': fields.StringField(nullable=True),
+        'destination_project': fields.UUIDField(nullable=True),
         'guest_format': fields.StringField(nullable=True),
         'device_type': fields.BlockDeviceTypeField(nullable=True),
         'disk_bus': fields.StringField(nullable=True),

@@ -586,7 +586,11 @@ class BlockDeviceMapping(BASE, NovaBase, models.SoftDeleteMixin):
                                               '0)')
 
     source_type = Column(String(255))
+    source_sp = Column(String(255))
+    source_project = Column(String(255))
     destination_type = Column(String(255))
+    destination_sp = Column(String(255))
+    destination_project = Column(String(255))
     guest_format = Column(String(255))
     device_type = Column(String(255))
     disk_bus = Column(String(255))
