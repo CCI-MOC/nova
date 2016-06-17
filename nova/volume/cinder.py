@@ -71,9 +71,9 @@ cinder_opts = [
                      'allow_availability_zone_fallback=False in cinder.conf), '
                      'the volume create request will fail and the instance '
                      'will fail the build request.'),
-#    cfg.StrOpt('auth_url',
-#               required=True,
-#               help="Auth URL for K2K"),
+    cfg.StrOpt('auth_url',
+               required=True,
+               help="Auth URL for K2K"),
 ]
 
 CONF = cfg.CONF
@@ -122,14 +122,14 @@ def cinderclient(context, remote_sp=None, remote_project=None):
     old_auth = auth
 
     if remote_sp and remote_project:
-        LOG.warn('doing remote auth for ' + remote_sp + ' ' + remote_project)
-        #idp_auth = identity.Token(auth_url=CONF.cinder.auth_url,
-        #                          token=context.auth_token,
-        #                          project_name=context.project_name,
-        #                          project_domain_id='default') # XXX(gsilvis) don't hardcode default
-        #auth = v3.Keystone2Keystone(idp_auth,
-        #                            remote_sp,
-        #                            project_id=remote_project)
+        LOG.warn('doing remote auth for ' + remote_sp + ' ' + remote_project) # XXX(gsilvis)
+        idp_auth = identity.Token(auth_url=CONF.cinder.auth_url,
+                                  token=context.auth_token,
+                                  project_name=context.project_name,
+                                  project_domain_id='default') # XXX(gsilvis) don't hardcode default
+        auth = v3.Keystone2Keystone(idp_auth,
+                                    remote_sp,
+                                    project_id=remote_project)
 
     service_type, service_name, interface = CONF.cinder.catalog_info.split(':')
 
