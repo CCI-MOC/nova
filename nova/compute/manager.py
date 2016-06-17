@@ -2357,8 +2357,11 @@ class ComputeManager(manager.Manager):
                 connector = self.driver.get_volume_connector(instance)
                 self.volume_api.terminate_connection(context,
                                                      bdm.volume_id,
-                                                     connector) # FIXME(gsilvis): add SP
-                self.volume_api.detach(context, bdm.volume_id, instance.uuid) # FIXME(gsilvis): add SP
+                                                     connector,
+                                                     remote_sp=bdm.destination_sp,
+                                                     remote_project=bdm.destination_project)
+                self.volume_api.detach(context, bdm.volume_id, instance.uuid,
+                    remote_sp=bdm.destination_sp, remote_project=bdm.destination_project)
             except exception.DiskNotFound as exc:
                 LOG.debug('Ignoring DiskNotFound: %s', exc,
                           instance=instance)
@@ -2367,12 +2370,20 @@ class ComputeManager(manager.Manager):
                           instance=instance)
             except (cinder_exception.EndpointNotFound,
                     keystone_exception.EndpointNotFound) as exc:
-                LOG.warning(_LW('Ignoring EndpointNotFound: %s'), exc,
+                LOG.warning(_LW('Ignoring EndpointNotFound for '
+                                'volume %(volume_id)s: %(exc)s'),
+                            {'exc': exc, 'volume_id': bdm.volume_id},
                             instance=instance)
             except cinder_exception.ClientException as exc:
-                LOG.warning(_LW('Ignoring Unknown cinder exception: %s'), exc,
+                LOG.warning(_LW('Ignoring unknown cinder exception for '
+                                'volume %(volume_id)s: %(exc)s'),
+                            {'exc': exc, 'volume_id': bdm.volume_id},
                             instance=instance)
-
+            except Exception as exc:
+                LOG.warning(_LW('Ignoring unknown exception for '
+                                'volume %(volume_id)s: %(exc)s'),
+                            {'exc': exc, 'volume_id': bdm.volume_id},
+                            instance=instance)
         if vol_bdms:
             LOG.info(_LI('Took %(time).2f seconds to detach %(num)s volumes '
                          'for instance.'),
@@ -2391,7 +2402,8 @@ class ComputeManager(manager.Manager):
                       instance_uuid=instance_uuid)
             if bdm.volume_id and bdm.delete_on_termination:
                 try:
-                    self.volume_api.delete(context, bdm.volume_id) # FIXME(gsilvis): add SP
+                    self.volume_api.delete(context, bdm.volume_id,
+                        remote_sp=bdm.destination_sp, remote_project=bdm.destination_project)
                 except Exception as exc:
                     exc_info = sys.exc_info()
                     LOG.warning(_LW('Failed to delete volume: %(volume_id)s '
@@ -2890,7 +2902,7 @@ class ComputeManager(manager.Manager):
             image_meta = objects.ImageMeta.from_image_ref(
                 context, self.image_api, image_ref)
         else:
-            image_meta = objects.ImageMeta.from_dict({})
+            image_meta = instance.image_meta
 
         # This instance.exists message should contain the original
         # image_ref, not the new one.  Since the DB has been updated
@@ -3929,7 +3941,7 @@ class ComputeManager(manager.Manager):
         for bdm in bdms:
             if bdm.is_volume:
                 self.volume_api.terminate_connection(context, bdm.volume_id,
-                                                     connector)
+                                                     connector, remote_sp=bdm.destination_sp, remote_project=bdm.destination_project)
 
     @staticmethod
     def _set_instance_info(instance, instance_type):

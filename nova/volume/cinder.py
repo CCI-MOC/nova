@@ -40,6 +40,9 @@ from nova.i18n import _
 from nova.i18n import _LE
 from nova.i18n import _LW
 
+from keystoneauth1 import identity
+from keystoneauth1.identity import v3
+
 cinder_opts = [
     cfg.StrOpt('catalog_info',
             default='volumev2:cinderv2:publicURL',
@@ -68,6 +71,9 @@ cinder_opts = [
                      'allow_availability_zone_fallback=False in cinder.conf), '
                      'the volume create request will fail and the instance '
                      'will fail the build request.'),
+#    cfg.StrOpt('auth_url',
+#               required=True,
+#               help="Auth URL for K2K"),
 ]
 
 CONF = cfg.CONF
@@ -101,7 +107,7 @@ def reset_globals():
     _SESSION = None
 
 
-def cinderclient(context):
+def cinderclient(context, remote_sp=None, remote_project=None):
     global _SESSION
     global _V1_ERROR_RAISED
 
@@ -113,6 +119,18 @@ def cinderclient(context):
     endpoint_override = None
 
     auth = context.get_auth_plugin()
+    old_auth = auth
+
+    if remote_sp and remote_project:
+        LOG.warn('doing remote auth for ' + remote_sp + ' ' + remote_project)
+        #idp_auth = identity.Token(auth_url=CONF.cinder.auth_url,
+        #                          token=context.auth_token,
+        #                          project_name=context.project_name,
+        #                          project_domain_id='default') # XXX(gsilvis) don't hardcode default
+        #auth = v3.Keystone2Keystone(idp_auth,
+        #                            remote_sp,
+        #                            project_id=remote_project)
+
     service_type, service_name, interface = CONF.cinder.catalog_info.split(':')
 
     service_parameters = {'service_type': service_type,
@@ -142,7 +160,7 @@ def cinderclient(context):
     return cinder_client.Client(version,
                                 session=_SESSION,
                                 auth=auth,
-                                endpoint_override=endpoint_override,
+                                #endpoint_override=endpoint_override,
                                 connect_retries=CONF.cinder.http_retries,
                                 **service_parameters)
 
@@ -290,14 +308,14 @@ class API(object):
     """API for interacting with the volume manager."""
 
     @translate_volume_exception
-    def get(self, context, volume_id):
-        item = cinderclient(context).volumes.get(volume_id)
+    def get(self, context, volume_id, remote_sp=None, remote_project=None):
+        item = cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.get(volume_id)
         return _untranslate_volume_summary_view(context, item)
 
     @translate_cinder_exception
-    def get_all(self, context, search_opts=None):
+    def get_all(self, context, search_opts=None, remote_sp=None, remote_project=None):
         search_opts = search_opts or {}
-        items = cinderclient(context).volumes.list(detailed=True,
+        items = cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.list(detailed=True,
                                                    search_opts=search_opts)
 
         rval = []
@@ -307,14 +325,14 @@ class API(object):
 
         return rval
 
-    def check_attached(self, context, volume):
+    def check_attached(self, context, volume, remote_sp=None, remote_project=None):
         if volume['status'] != "in-use":
             msg = _("volume '%(vol)s' status must be 'in-use'. Currently in "
                     "'%(status)s' status") % {"vol": volume['id'],
                                               "status": volume['status']}
             raise exception.InvalidVolume(reason=msg)
 
-    def check_attach(self, context, volume, instance=None):
+    def check_attach(self, context, volume, instance=None, remote_sp=None, remote_project=None):
         # TODO(vish): abstract status checking?
         if volume['status'] != "available":
             msg = _("volume '%(vol)s' status must be 'available'. Currently "
@@ -336,7 +354,7 @@ class API(object):
                             'vol_zone': volume['availability_zone']}
                 raise exception.InvalidVolume(reason=msg)
 
-    def check_detach(self, context, volume, instance=None):
+    def check_detach(self, context, volume, instance=None, remote_sp=None, remote_project=None):
         # TODO(vish): abstract status checking?
         if volume['status'] == "available":
             msg = _("volume %s already detached") % volume['id']
@@ -355,29 +373,29 @@ class API(object):
             raise exception.VolumeUnattached(volume_id=volume['id'])
 
     @translate_volume_exception
-    def reserve_volume(self, context, volume_id):
-        cinderclient(context).volumes.reserve(volume_id)
+    def reserve_volume(self, context, volume_id, remote_sp=None, remote_project=None):
+        cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.reserve(volume_id)
 
     @translate_volume_exception
-    def unreserve_volume(self, context, volume_id):
-        cinderclient(context).volumes.unreserve(volume_id)
+    def unreserve_volume(self, context, volume_id, remote_sp=None, remote_project=None):
+        cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.unreserve(volume_id)
 
     @translate_volume_exception
-    def begin_detaching(self, context, volume_id):
-        cinderclient(context).volumes.begin_detaching(volume_id)
+    def begin_detaching(self, context, volume_id, remote_sp=None, remote_project=None):
+        cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.begin_detaching(volume_id)
 
     @translate_volume_exception
-    def roll_detaching(self, context, volume_id):
-        cinderclient(context).volumes.roll_detaching(volume_id)
+    def roll_detaching(self, context, volume_id, remote_sp=None, remote_project=None):
+        cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.roll_detaching(volume_id)
 
     @translate_volume_exception
-    def attach(self, context, volume_id, instance_uuid, mountpoint, mode='rw'):
-        cinderclient(context).volumes.attach(volume_id, instance_uuid,
+    def attach(self, context, volume_id, instance_uuid, mountpoint, mode='rw', remote_sp=None, remote_project=None):
+        cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.attach(volume_id, instance_uuid,
                                              mountpoint, mode=mode)
 
     @translate_volume_exception
     def detach(self, context, volume_id, instance_uuid=None,
-               attachment_id=None):
+               attachment_id=None, remote_sp=None, remote_project=None):
         if attachment_id is None:
             volume = self.get(context, volume_id)
             if volume['multiattach']:
@@ -403,13 +421,13 @@ class API(object):
                                     "cannot perform the detach."),
                                 {'volume_id': volume_id})
 
-        cinderclient(context).volumes.detach(volume_id, attachment_id)
+        cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.detach(volume_id, attachment_id)
 
     @translate_volume_exception
-    def initialize_connection(self, context, volume_id, connector):
+    def initialize_connection(self, context, volume_id, connector, remote_sp=None, remote_project=None):
         try:
             connection_info = cinderclient(
-                context).volumes.initialize_connection(volume_id, connector)
+                context, remote_sp=remote_sp, remote_project=remote_project).volumes.initialize_connection(volume_id, connector)
             connection_info['connector'] = connector
             return connection_info
         except cinder_exception.ClientException as ex:
@@ -423,7 +441,7 @@ class API(object):
                            'msg': six.text_type(ex),
                            'code': ex.code})
                 try:
-                    self.terminate_connection(context, volume_id, connector)
+                    self.terminate_connection(context, volume_id, connector, remote_sp=remote_sp, remote_project=remote_project)
                 except Exception as exc:
                     LOG.error(_LE('Connection between volume %(vol)s and host '
                                   '%(host)s might have succeeded, but attempt '
@@ -434,24 +452,25 @@ class API(object):
                               {'vol': volume_id,
                                'host': connector.get('host'),
                                'msg': six.text_type(exc),
-                               'code': exc.code})
+                               'code': (
+                                exc.code if hasattr(exc, 'code') else None)})
 
     @translate_volume_exception
-    def terminate_connection(self, context, volume_id, connector):
-        return cinderclient(context).volumes.terminate_connection(volume_id,
+    def terminate_connection(self, context, volume_id, connector, remote_sp=None, remote_project=None):
+        return cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.terminate_connection(volume_id,
                                                                   connector)
 
     @translate_cinder_exception
     def migrate_volume_completion(self, context, old_volume_id, new_volume_id,
-                                  error=False):
-        return cinderclient(context).volumes.migrate_volume_completion(
+                                  error=False, remote_sp=None, remote_project=None):
+        return cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.migrate_volume_completion(
             old_volume_id, new_volume_id, error)
 
     @translate_cinder_exception
     def create(self, context, size, name, description, snapshot=None,
                image_id=None, volume_type=None, metadata=None,
-               availability_zone=None):
-        client = cinderclient(context)
+               availability_zone=None, remote_sp=None, remote_project=None):
+        client = cinderclient(context, remote_sp=remote_sp, remote_project=remote_project)
 
         if snapshot is not None:
             snapshot_id = snapshot['id']
@@ -480,21 +499,21 @@ class API(object):
             raise exception.OverQuota(overs='volumes')
 
     @translate_volume_exception
-    def delete(self, context, volume_id):
-        cinderclient(context).volumes.delete(volume_id)
+    def delete(self, context, volume_id, remote_sp=None, remote_project=None):
+        cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.delete(volume_id)
 
     @translate_volume_exception
-    def update(self, context, volume_id, fields):
+    def update(self, context, volume_id, fields, remote_sp=None, remote_project=None):
         raise NotImplementedError()
 
     @translate_snapshot_exception
-    def get_snapshot(self, context, snapshot_id):
-        item = cinderclient(context).volume_snapshots.get(snapshot_id)
+    def get_snapshot(self, context, snapshot_id, remote_sp=None, remote_project=None):
+        item = cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volume_snapshots.get(snapshot_id)
         return _untranslate_snapshot_summary_view(context, item)
 
     @translate_cinder_exception
-    def get_all_snapshots(self, context):
-        items = cinderclient(context).volume_snapshots.list(detailed=True)
+    def get_all_snapshots(self, context, remote_sp=None, remote_project=None):
+        items = cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volume_snapshots.list(detailed=True)
         rvals = []
 
         for item in items:
@@ -503,16 +522,16 @@ class API(object):
         return rvals
 
     @translate_volume_exception
-    def create_snapshot(self, context, volume_id, name, description):
-        item = cinderclient(context).volume_snapshots.create(volume_id,
+    def create_snapshot(self, context, volume_id, name, description, remote_sp=None, remote_project=None):
+        item = cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volume_snapshots.create(volume_id,
                                                              False,
                                                              name,
                                                              description)
         return _untranslate_snapshot_summary_view(context, item)
 
     @translate_volume_exception
-    def create_snapshot_force(self, context, volume_id, name, description):
-        item = cinderclient(context).volume_snapshots.create(volume_id,
+    def create_snapshot_force(self, context, volume_id, name, description, remote_sp=None, remote_project=None):
+        item = cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volume_snapshots.create(volume_id,
                                                              True,
                                                              name,
                                                              description)
@@ -520,16 +539,16 @@ class API(object):
         return _untranslate_snapshot_summary_view(context, item)
 
     @translate_snapshot_exception
-    def delete_snapshot(self, context, snapshot_id):
-        cinderclient(context).volume_snapshots.delete(snapshot_id)
+    def delete_snapshot(self, context, snapshot_id, remote_sp=None, remote_project=None):
+        cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volume_snapshots.delete(snapshot_id)
 
     @translate_cinder_exception
-    def get_volume_encryption_metadata(self, context, volume_id):
-        return cinderclient(context).volumes.get_encryption_metadata(volume_id)
+    def get_volume_encryption_metadata(self, context, volume_id, remote_sp=None, remote_project=None):
+        return cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volumes.get_encryption_metadata(volume_id)
 
     @translate_snapshot_exception
-    def update_snapshot_status(self, context, snapshot_id, status):
-        vs = cinderclient(context).volume_snapshots
+    def update_snapshot_status(self, context, snapshot_id, status, remote_sp=None, remote_project=None):
+        vs = cinderclient(context, remote_sp=remote_sp, remote_project=remote_project).volume_snapshots
 
         # '90%' here is used to tell Cinder that Nova is done
         # with its portion of the 'creating' state. This can

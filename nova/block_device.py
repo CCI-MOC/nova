@@ -240,17 +240,17 @@ class BlockDeviceDict(dict):
                 raise exception.InvalidBDMFormat(
                     details=_("Cannot have a remote blank source"))
 
-            if destination_type == 'local' and dest_sp:
+            if destination_type == 'local' and destination_sp:
                 raise exception.InvalidBDMFormat(
                     details=_("Cannot have a remote local destination"))
 
-            if source_type == 'volume' and destination_type == 'volume':
-                if source_sp and not dest_sp:
+            if source_type != 'blank' and destination_type == 'volume':
+                if source_sp and not destination_sp:
                     raise exception.InvalidBDMFormat(
-                        details=_("volume->volume copying is not supported")
-                elif dest_sp and not source_sp:
+                        details=_("volume->volume copying is not supported"))
+                elif destination_sp and not source_sp:
                     raise exception.InvalidBDMFormat(
-                        details=_("volume->volume copying is not supported")
+                        details=_("volume->volume copying is not supported"))
 
         api_dict.pop('uuid', None)
         return cls(api_dict)

@@ -213,13 +213,13 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
     _legacy_fields = set(['connection_info', 'mount_device',
                           'delete_on_termination'])
     _new_fields = set(['guest_format', 'device_type',
-                       'disk_bus', 'boot_index'])
+                       'disk_bus', 'boot_index', 'destination_project', 'destination_sp'])
     _fields = _legacy_fields | _new_fields
 
     _valid_source = 'volume'
     _valid_destination = 'volume'
 
-    _proxy_as_attr = set(['volume_size', 'volume_id'])
+    _proxy_as_attr = set(['volume_size', 'volume_id', 'destination_project', 'destination_sp'])
     _update_on_save = {'disk_bus': None,
                        'device_name': 'mount_device',
                        'device_type': None}
@@ -252,9 +252,9 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
     @update_db
     def attach(self, context, instance, volume_api, virt_driver,
                do_check_attach=True, do_driver_attach=False, **kwargs):
-        volume = volume_api.get(context, self.volume_id)
+        volume = volume_api.get(context, self.volume_id, remote_project=self.destination_project, remote_sp=self.destination_sp)
         if do_check_attach:
-            volume_api.check_attach(context, volume, instance=instance)
+            volume_api.check_attach(context, volume, instance=instance, remote_project=self.destination_project, remote_sp=self.destination_sp)
 
         volume_id = volume['id']
         context = context.elevated()
@@ -262,7 +262,7 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
         connector = virt_driver.get_volume_connector(instance)
         connection_info = volume_api.initialize_connection(context,
                                                            volume_id,
-                                                           connector)
+                                                           connector, remote_project=self.destination_project, remote_sp=self.destination_sp)
         if 'serial' not in connection_info:
             connection_info['serial'] = self.volume_id
         self._preserve_multipath_id(connection_info)
@@ -270,7 +270,7 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
         # If do_driver_attach is False, we will attach a volume to an instance
         # at boot time. So actual attach is done by instance creation code.
         if do_driver_attach:
-            encryption = encryptors.get_encryption_metadata(
+            encryption = encryptors.get_encryption_metadata(      # XXX(gsilvis) encryption!!!
                 context, volume_api, volume_id, connection_info)
 
             try:
@@ -286,7 +286,7 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
                                    'mountpoint': self['mount_device']},
                                   context=context, instance=instance)
                     volume_api.terminate_connection(context, volume_id,
-                                                    connector)
+                                                    connector, remote_project=self.destination_project, remote_sp=self.destination_sp)
         self['connection_info'] = connection_info
         if self.volume_size is None:
             self.volume_size = volume.get('size')
@@ -302,7 +302,7 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
             self.save()
             try:
                 volume_api.attach(context, volume_id, instance.uuid,
-                                  self['mount_device'], mode=mode)
+                                  self['mount_device'], mode=mode, remote_project=self.destination_project, remote_sp=self.destination_sp)
             except Exception:
                 with excutils.save_and_reraise_exception():
                     if do_driver_attach:
@@ -319,12 +319,12 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
                                      exc_info=True, context=context,
                                      instance=instance)
                     volume_api.terminate_connection(context, volume_id,
-                                                    connector)
+                                                    connector, remote_project=self.destination_project, remote_sp=self.destination_sp)
 
                     # Cinder-volume might have completed volume attach. So
                     # we should detach the volume. If the attach did not
                     # happen, the detach request will be ignored.
-                    volume_api.detach(context, volume_id)
+                    volume_api.detach(context, volume_id, remote_project=self.destination_project, remote_sp=self.destination_sp)
 
     @update_db
     def refresh_connection_info(self, context, instance,
@@ -336,7 +336,7 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
         connector = virt_driver.get_volume_connector(instance)
         connection_info = volume_api.initialize_connection(context,
                                                            self.volume_id,
-                                                           connector)
+                                                           connector, remote_project=self.destination_project, remote_sp=self.destination_sp)
         if 'serial' not in connection_info:
             connection_info['serial'] = self.volume_id
         self._preserve_multipath_id(connection_info)
@@ -361,7 +361,7 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
             with excutils.save_and_reraise_exception():
                 if self['delete_on_termination']:
                     try:
-                        volume_api.delete(context, volume_id)
+                        volume_api.delete(context, volume_id, remote_project=self.destination_project, remote_sp=self.destination_sp)
                     except Exception as exc:
                         LOG.warn(_LW('Failed to delete volume: %(volume_id)s '
                                      'due to %(exc)s'),
@@ -371,7 +371,7 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
 class DriverSnapshotBlockDevice(DriverVolumeBlockDevice):
 
     _valid_source = 'snapshot'
-    _proxy_as_attr = set(['volume_size', 'volume_id', 'snapshot_id'])
+    _proxy_as_attr = set(['volume_size', 'volume_id', 'snapshot_id', 'destination_project', 'destination_sp'])
 
     def attach(self, context, instance, volume_api,
                virt_driver, wait_func=None, do_check_attach=True):
@@ -381,7 +381,8 @@ class DriverSnapshotBlockDevice(DriverVolumeBlockDevice):
             snapshot = volume_api.get_snapshot(context,
                                                self.snapshot_id)
             vol = volume_api.create(context, self.volume_size, '', '',
-                                    snapshot, availability_zone=av_zone)
+                                    snapshot, availability_zone=av_zone,
+                                    remote_sp=self.destination_sp, remote_project=self.destination_proj)
             if wait_func:
                 self._call_wait_func(context, wait_func, volume_api, vol['id'])
 
@@ -396,7 +397,7 @@ class DriverSnapshotBlockDevice(DriverVolumeBlockDevice):
 class DriverImageBlockDevice(DriverVolumeBlockDevice):
 
     _valid_source = 'image'
-    _proxy_as_attr = set(['volume_size', 'volume_id', 'image_id'])
+    _proxy_as_attr = set(['volume_size', 'volume_id', 'image_id', 'destination_project', 'destination_sp'])
 
     def attach(self, context, instance, volume_api,
                virt_driver, wait_func=None, do_check_attach=True):
@@ -404,7 +405,8 @@ class DriverImageBlockDevice(DriverVolumeBlockDevice):
             av_zone = _get_volume_create_az_value(instance)
             vol = volume_api.create(context, self.volume_size,
                                     '', '', image_id=self.image_id,
-                                    availability_zone=av_zone)
+                                    availability_zone=av_zone,
+                                    remote_sp=self.destination_sp, remote_project=self.destination_project)
             if wait_func:
                 self._call_wait_func(context, wait_func, volume_api, vol['id'])
 
@@ -418,7 +420,7 @@ class DriverImageBlockDevice(DriverVolumeBlockDevice):
 class DriverBlankBlockDevice(DriverVolumeBlockDevice):
 
     _valid_source = 'blank'
-    _proxy_as_attr = set(['volume_size', 'volume_id', 'image_id'])
+    _proxy_as_attr = set(['volume_size', 'volume_id', 'image_id', 'destination_project', 'destination_sp'])
 
     def attach(self, context, instance, volume_api,
                virt_driver, wait_func=None, do_check_attach=True):
@@ -426,7 +428,8 @@ class DriverBlankBlockDevice(DriverVolumeBlockDevice):
             vol_name = instance.uuid + '-blank-vol'
             av_zone = _get_volume_create_az_value(instance)
             vol = volume_api.create(context, self.volume_size, vol_name, '',
-                                    availability_zone=av_zone)
+                                    availability_zone=av_zone,
+                                    remote_sp=self.destination_sp, remote_project=self.destination_project)
             if wait_func:
                 self._call_wait_func(context, wait_func, volume_api, vol['id'])
 
