@@ -1296,10 +1296,10 @@ class API(base.Base):
                         "size specified"))
             elif volume_id is not None:
                 try:
-                    volume = self.volume_api.get(context, volume_id)
+                    volume = self.volume_api.get(context, volume_id, remote_sp=bdm.destination_sp, remote_project=bdm.destination_project)
                     self.volume_api.check_attach(context,
                                                  volume,
-                                                 instance=instance)
+                                                 instance=instance, remote_sp=bdm.destination_sp, remote_project=bdm.destination_project)
                     bdm.volume_size = volume.get('size')
                 except (exception.CinderConnectionFailed,
                         exception.InvalidVolume):
@@ -1308,7 +1308,7 @@ class API(base.Base):
                     raise exception.InvalidBDMVolume(id=volume_id)
             elif snapshot_id is not None:
                 try:
-                    snap = self.volume_api.get_snapshot(context, snapshot_id)
+                    snap = self.volume_api.get_snapshot(context, snapshot_id, remote_sp=bdm.destination_sp, remote_project=bdm.destination_project)
                     bdm.volume_size = bdm.volume_size or snap.get('size')
                 except exception.CinderConnectionFailed:
                     raise

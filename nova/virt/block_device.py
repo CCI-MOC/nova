@@ -356,7 +356,7 @@ class DriverVolumeBlockDevice(DriverBlockDevice):
 
     def _call_wait_func(self, context, wait_func, volume_api, volume_id):
         try:
-            wait_func(context, volume_id)
+            wait_func(context, volume_id, remote_sp=self.destination_sp, remote_project=self.destination_project)
         except exception.VolumeNotCreated:
             with excutils.save_and_reraise_exception():
                 if self['delete_on_termination']:
@@ -379,10 +379,10 @@ class DriverSnapshotBlockDevice(DriverVolumeBlockDevice):
         if not self.volume_id:
             av_zone = _get_volume_create_az_value(instance)
             snapshot = volume_api.get_snapshot(context,
-                                               self.snapshot_id)
+                                               self.snapshot_id, remote_sp=self.destination_sp, remote_project=self.destination_project)
             vol = volume_api.create(context, self.volume_size, '', '',
                                     snapshot, availability_zone=av_zone,
-                                    remote_sp=self.destination_sp, remote_project=self.destination_proj)
+                                    remote_sp=self.destination_sp, remote_project=self.destination_project)
             if wait_func:
                 self._call_wait_func(context, wait_func, volume_api, vol['id'])
 

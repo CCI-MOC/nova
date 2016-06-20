@@ -115,6 +115,10 @@ def cinderclient(context, remote_sp=None, remote_project=None):
         _SESSION = ks_loading.load_session_from_conf_options(CONF,
                                                              CINDER_OPT_GROUP)
 
+    import pdb
+    print remote_sp
+    pdb.set_trace()
+
     url = None
     endpoint_override = None
 
@@ -129,7 +133,7 @@ def cinderclient(context, remote_sp=None, remote_project=None):
                                   project_domain_id='default') # XXX(gsilvis) don't hardcode default
         auth = v3.Keystone2Keystone(idp_auth,
                                     remote_sp,
-                                    project_id=remote_project)
+                                    project_name=remote_project, project_domain_id='default')
 
     service_type, service_name, interface = CONF.cinder.catalog_info.split(':')
 
@@ -397,7 +401,7 @@ class API(object):
     def detach(self, context, volume_id, instance_uuid=None,
                attachment_id=None, remote_sp=None, remote_project=None):
         if attachment_id is None:
-            volume = self.get(context, volume_id)
+            volume = self.get(context, volume_id, remote_sp=remote_sp, remote_project=remote_project)
             if volume['multiattach']:
                 attachments = volume.get('attachments', {})
                 if instance_uuid:

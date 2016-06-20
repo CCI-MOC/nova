@@ -1395,7 +1395,7 @@ class ComputeManager(manager.Manager):
 
         return _sync_refresh()
 
-    def _await_block_device_map_created(self, context, vol_id):
+    def _await_block_device_map_created(self, context, vol_id, remote_sp=None, remote_project=None):
         # TODO(yamahata): creating volume simultaneously
         #                 reduces creation time?
         # TODO(yamahata): eliminate dumb polling
@@ -1413,7 +1413,7 @@ class ComputeManager(manager.Manager):
         if retries >= 1:
             attempts = retries + 1
         for attempt in range(1, attempts + 1):
-            volume = self.volume_api.get(context, vol_id)
+            volume = self.volume_api.get(context, vol_id, remote_sp=remote_sp, remote_project=remote_project)
             volume_status = volume['status']
             if volume_status not in ['creating', 'downloading']:
                 if volume_status == 'available':
