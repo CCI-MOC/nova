@@ -140,7 +140,8 @@ def generate_identity_headers(context, status='Confirmed'):
     }
 
 
-def _glanceclient_from_endpoint(context, endpoint, version=1):
+def _glanceclient_from_endpoint(context, endpoint, version=1,
+                                remote_sp=None, remote_project=None):
         """Instantiate a new glanceclient.Client object."""
         params = {}
         # NOTE(sdague): even if we aren't using keystone, it doesn't
@@ -157,6 +158,23 @@ def _glanceclient_from_endpoint(context, endpoint, version=1):
                 params['key_file'] = CONF.ssl.key_file
             if CONF.ssl.ca_file:
                 params['cacert'] = CONF.ssl.ca_file
+
+        if remote_sp and remote_project:
+            from keystoneauth1 import identity
+            from keystoneauth1 import session as ks
+            from keystoneauth1.identity.v3.k2k import Keystone2Keystone
+
+            idp_auth = identity.Token(auth_url='http://localhost:35357', # XXX: actual keystone
+                                      token=context.auth_token,
+                                      project_id=context.tenant)
+
+            auth = Keystone2Keystone(idp_auth,
+                                     remote_sp,
+                                     project_id=remote_project)
+
+            session = ks.Session(auth=auth)
+            return glanceclient.Client(str(version), session=session)
+
         return glanceclient.Client(str(version), endpoint, **params)
 
 
@@ -206,7 +224,8 @@ def get_api_servers():
 class GlanceClientWrapper(object):
     """Glance client wrapper class that implements retries."""
 
-    def __init__(self, context=None, endpoint=None, version=1):
+    def __init__(self, context=None, endpoint=None, version=1,
+                 remote_sp=None, remote_project=None):
         if endpoint is not None:
             self.client = self._create_static_client(context,
                                                      endpoint,
@@ -267,8 +286,9 @@ class GlanceClientWrapper(object):
 class GlanceImageService(object):
     """Provides storage and retrieval of disk image objects within Glance."""
 
-    def __init__(self, client=None):
-        self._client = client or GlanceClientWrapper()
+    def __init__(self, client=None, remote_sp=None, remote_project=None):
+        self._client = client or GlanceClientWrapper(
+            remote_sp=remote_sp, remote_project=remote_project)
         # NOTE(jbresnah) build the table of download handlers at the beginning
         # so that operators can catch errors at load time rather than whenever
         # a user attempts to use a module.  Note this cannot be done in glance
@@ -706,7 +726,8 @@ def _translate_plain_exception(exc_value):
     return exc_value
 
 
-def get_remote_image_service(context, image_href):
+def get_remote_image_service(context, image_href,
+                             remote_sp=None, remote_project=None):
     """Create an image_service and parse the id from the given image_href.
 
     The image_href param can be an href of the form
@@ -718,6 +739,15 @@ def get_remote_image_service(context, image_href):
     :returns: a tuple of the form (image_service, image_id)
 
     """
+    # Note(knikolla): For now I'm using <remote_sp>:<project_id>:<image_id>
+    if ':' in str(image_href) and not remote_sp and not remote_project:
+        image_id = image_href.split(':')[2]
+        project_id = image_href.split(':')[1]
+        remote_sp = image_href(':')[0]
+        image_service = GlanceImageService(remote_sp=remote_sp,
+                                           remote_project=project_id)
+        return image_service, image_id
+
     # NOTE(bcwaldon): If image_href doesn't look like a URI, assume its a
     # standalone image ID
     if '/' not in str(image_href):
