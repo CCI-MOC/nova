@@ -752,6 +752,7 @@ def get_remote_image_service(context, image_href,
         remote_sp = image_href.split(':')[0]
         image_service = GlanceImageService(remote_sp=remote_sp,
                                            remote_project=project_id)
+
         return image_service, image_id
 
     # NOTE(bcwaldon): If image_href doesn't look like a URI, assume its a
