@@ -164,7 +164,7 @@ def _glanceclient_from_endpoint(context, endpoint, version=1,
             from keystoneauth1 import session as ks
             from keystoneauth1.identity.v3.k2k import Keystone2Keystone
 
-            idp_auth = identity.Token(auth_url='http://localhost:35357', # XXX: actual keystone
+            idp_auth = identity.Token(auth_url='http://localhost:35357/v3', # XXX: actual keystone
                                       token=context.auth_token,
                                       project_id=context.tenant)
 
