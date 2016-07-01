@@ -226,6 +226,8 @@ class GlanceClientWrapper(object):
 
     def __init__(self, context=None, endpoint=None, version=1,
                  remote_sp=None, remote_project=None):
+        self.remote_sp = remote_sp
+        self.remote_project = remote_project
         if endpoint is not None:
             self.client = self._create_static_client(context,
                                                      endpoint,
@@ -237,14 +239,18 @@ class GlanceClientWrapper(object):
     def _create_static_client(self, context, endpoint, version):
         """Create a client that we'll use for every call."""
         self.api_server = str(endpoint)
-        return _glanceclient_from_endpoint(context, endpoint, version)
+        return _glanceclient_from_endpoint(context, endpoint, version,
+                                           remote_sp=self.remote_sp,
+                                           remote_project=self.remote_project)
 
     def _create_onetime_client(self, context, version):
         """Create a client that will be used for one call."""
         if self.api_servers is None:
             self.api_servers = get_api_servers()
         self.api_server = next(self.api_servers)
-        return _glanceclient_from_endpoint(context, self.api_server, version)
+        return _glanceclient_from_endpoint(context, self.api_server, version,
+                                           remote_sp=self.remote_sp,
+                                           remote_project=self.remote_project)
 
     def call(self, context, version, method, *args, **kwargs):
         """Call a glance client method.  If we get a connection error,
@@ -743,7 +749,7 @@ def get_remote_image_service(context, image_href,
     if ':' in str(image_href) and not remote_sp and not remote_project:
         image_id = image_href.split(':')[2]
         project_id = image_href.split(':')[1]
-        remote_sp = image_href(':')[0]
+        remote_sp = image_href.split(':')[0]
         image_service = GlanceImageService(remote_sp=remote_sp,
                                            remote_project=project_id)
         return image_service, image_id
