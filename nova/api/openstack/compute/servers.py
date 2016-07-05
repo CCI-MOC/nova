@@ -536,6 +536,13 @@ class ServersController(wsgi.Controller):
         password = self._get_server_admin_password(server_dict)
         name = common.normalize_name(server_dict['name'])
 
+        if server_dict.has_key('imageSP') and server_dict.has_key('imageProject'):
+            image_sp = server_dict.get('imageSP')
+            image_project = server_dict.get('imageProject')
+        else:
+            image_sp = None
+            image_project = None
+
         if api_version_request.is_supported(req, min_version='2.19'):
             if 'description' in server_dict:
                 # This is allowed to be None
@@ -618,6 +625,8 @@ class ServersController(wsgi.Controller):
             (instances, resv_id) = self.compute_api.create(context,
                             inst_type,
                             image_uuid,
+                            image_sp=image_sp,
+                            image_project=image_project,
                             display_name=name,
                             display_description=description,
                             availability_zone=availability_zone,

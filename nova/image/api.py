@@ -68,7 +68,7 @@ class API(object):
         return session.detail(context, **kwargs)
 
     def get(self, context, id_or_uri, include_locations=False,
-            show_deleted=True):
+            show_deleted=True, image_sp=None, image_project=None):
         """Retrieves the information record for a single disk image. If the
         supplied identifier parameter is a UUID, the default driver will
         be used to return information about the image. If the supplied
@@ -87,6 +87,9 @@ class API(object):
         :param show_deleted: (Optional) show the image even the status of
                              image is deleted.
         """
+        if image_sp and image_project and ':' not in id_or_uri:
+            id_or_uri= '%s:%s:%s' % (image_sp, image_project, id_or_uri)
+
         session, image_id = self._get_session_and_image_id(context, id_or_uri)
         return session.show(context, image_id,
                             include_locations=include_locations,
@@ -173,6 +176,9 @@ class API(object):
         and the reason it needs to be cleaned up and standardized across the
         virt driver callers.
         """
+
+        import pdb; pdb.set_trace()
+
         # TODO(jaypipes): Deprecate and remove this method entirely when we
         #                 move to a system that simply returns a file handle
         #                 to a bytestream iterator and allows the caller to

@@ -25,6 +25,8 @@ base_create = {
             'properties': {
                 'name': parameter_types.name,
                 'imageRef': parameter_types.image_ref,
+                'imageSP': {'type': 'string'},
+                'imageProject': {'type': 'string'},
                 'flavorRef': parameter_types.flavor_ref,
                 'adminPass': parameter_types.admin_password,
                 'metadata': parameter_types.metadata,

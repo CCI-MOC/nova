@@ -781,11 +781,14 @@ class API(base.Base):
         return block_device_obj.block_device_make_list_from_dicts(
                 context, block_device_mapping)
 
-    def _get_image(self, context, image_href):
+    def _get_image(self, context, image_href,
+                   image_sp=None, image_project=None):
         if not image_href:
             return None, {}
 
-        image = self.image_api.get(context, image_href)
+        image = self.image_api.get(context, image_href,
+                                   image_sp=image_sp,
+                                   image_project=image_project)
         return image['id'], image
 
     def _checks_for_create_and_rebuild(self, context, image_id, image,
@@ -1106,7 +1109,8 @@ class API(base.Base):
                requested_networks, config_drive,
                block_device_mapping, auto_disk_config, filter_properties,
                reservation_id=None, legacy_bdm=True, shutdown_terminate=False,
-               check_server_group_quota=False):
+               check_server_group_quota=False,
+               image_sp=None, image_project=None):
         """Verify all the input parameters regardless of the provisioning
         strategy being performed and schedule the instance(s) for
         creation.
@@ -1121,7 +1125,9 @@ class API(base.Base):
         block_device_mapping = block_device_mapping or []
 
         if image_href:
-            image_id, boot_meta = self._get_image(context, image_href)
+            image_id, boot_meta = self._get_image(context, image_href,
+                                                  image_sp=image_sp,
+                                                  image_project=image_project)
         else:
             image_id = None
             boot_meta = self._get_bdm_image_metadata(
@@ -1500,7 +1506,8 @@ class API(base.Base):
 
     @hooks.add_hook("create_instance")
     def create(self, context, instance_type,
-               image_href, kernel_id=None, ramdisk_id=None,
+               image_href, image_sp=None, image_project=None,
+               kernel_id=None, ramdisk_id=None,
                min_count=None, max_count=None,
                display_name=None, display_description=None,
                key_name=None, key_data=None, security_group=None,
@@ -1553,7 +1560,8 @@ class API(base.Base):
                        filter_properties=filter_properties,
                        legacy_bdm=legacy_bdm,
                        shutdown_terminate=shutdown_terminate,
-                       check_server_group_quota=check_server_group_quota)
+                       check_server_group_quota=check_server_group_quota,
+                       image_sp=image_sp, image_project=image_project)
 
     def _check_auto_disk_config(self, instance=None, image=None,
                                 **extra_instance_updates):
