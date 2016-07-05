@@ -26,7 +26,8 @@ class API(object):
     interface.
     """
 
-    def _get_session_and_image_id(self, context, id_or_uri):
+    def _get_session_and_image_id(self, context, id_or_uri,
+                                  image_sp=None, image_project=None):
         """Returns a tuple of (session, image_id). If the supplied `id_or_uri`
         is an image ID, then the default client session will be returned
         for the context's user, along with the image ID. If the supplied
@@ -38,7 +39,9 @@ class API(object):
         :param id_or_uri: A UUID identifier or an image URI to look up image
                           information for.
         """
-        return glance.get_remote_image_service(context, id_or_uri)
+        return glance.get_remote_image_service(context, id_or_uri,
+                                               remote_sp=image_sp,
+                                               remote_project=image_project)
 
     def _get_session(self, _context):
         """Returns a client session that can be used to query for image
@@ -87,10 +90,12 @@ class API(object):
         :param show_deleted: (Optional) show the image even the status of
                              image is deleted.
         """
-        if image_sp and image_project and ':' not in id_or_uri:
-            id_or_uri= '%s:%s:%s' % (image_sp, image_project, id_or_uri)
+        session, image_id = self._get_session_and_image_id(
+            context, id_or_uri,
+            image_sp=image_sp,
+            image_project=image_project
+        )
 
-        session, image_id = self._get_session_and_image_id(context, id_or_uri)
         return session.show(context, image_id,
                             include_locations=include_locations,
                             show_deleted=show_deleted)
@@ -177,7 +182,9 @@ class API(object):
         virt driver callers.
         """
 
-        import pdb; pdb.set_trace()
+        # XXX
+        # Find out where this is called from so we can populate
+        # Using proxy might not be needed at all thought.
 
         # TODO(jaypipes): Deprecate and remove this method entirely when we
         #                 move to a system that simply returns a file handle

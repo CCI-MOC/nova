@@ -749,18 +749,19 @@ def get_remote_image_service(context, image_href,
     """
     # Note(knikolla): For now I'm using <remote_sp>:<project_id>:<image_id>
     if ':' in str(image_href) and not remote_sp and not remote_project:
-        image_id = image_href.split(':')[2]
-        project_id = image_href.split(':')[1]
+        image_href = image_href.split(':')[2]
+        remote_project = image_href.split(':')[1]
         remote_sp = image_href.split(':')[0]
-        locations[image_id]= (remote_sp, project_id)
-        image_service = GlanceImageService(remote_sp=remote_sp,
-                                           remote_project=project_id)
-        return image_service, image_id
 
-    if locations.has_key(image_href):
-        remote_sp, project_id = locations[image_href]
+    if remote_sp and remote_project:
+        locations[image_href] = (remote_sp, remote_project)
         image_service = GlanceImageService(remote_sp=remote_sp,
-                                           remote_project=project_id)
+                                           remote_project=remote_project)
+        return image_service, image_href
+    elif locations.has_key(image_href):
+        remote_sp, remote_project = locations[image_href]
+        image_service = GlanceImageService(remote_sp=remote_sp,
+                                           remote_project=remote_project)
         return image_service, image_href
 
     # NOTE(bcwaldon): If image_href doesn't look like a URI, assume its a
