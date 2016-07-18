@@ -158,6 +158,12 @@ class VolumeController(wsgi.Controller):
         metadata = vol.get('metadata')
         snapshot_id = vol.get('snapshot_id', None)
 
+        remote_sp = None
+        if body['volumeAttachment'].has_key('serviceProvider'):
+            remote_sp = body['volumeAttachment']['serviceProvider']
+            if body['volumeAttachment'].has_key('remote_project'):
+                remote_project = body['volumeAttachment']['remote_project']
+
         if snapshot_id is not None:
             try:
                 snapshot = self.volume_api.get_snapshot(context, snapshot_id)
@@ -181,7 +187,9 @@ class VolumeController(wsgi.Controller):
                 snapshot=snapshot,
                 volume_type=vol_type,
                 metadata=metadata,
-                availability_zone=availability_zone
+                availability_zone=availability_zone,
+                remote_sp=remote_sp,
+                remote_project=remote_project
                 )
         except exception.InvalidInput as err:
             raise exc.HTTPBadRequest(explanation=err.format_message())

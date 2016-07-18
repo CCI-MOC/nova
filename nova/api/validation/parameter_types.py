@@ -347,3 +347,7 @@ ipv6 = {
 cidr = {
     'type': 'string', 'format': 'cidr'
 }
+
+service_provider = {
+    'type': 'string'
+}
